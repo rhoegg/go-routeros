@@ -38,29 +38,20 @@ func (r *ApiReader) ReadWord() (string, error) {
 
 // Algorithm for length is at http://wiki.mikrotik.com/wiki/Manual:API#Protocol
 func (r *ApiReader) ReadLen() (uint32, error) {
+    threshold := [...]byte{0, 0x80, 0xC0, 0xE0, 0xF0}
+
     first, err := r.rd.ReadByte()
-    log.Printf("we got to level 1 (%d)", first)
+    log.Printf("first byte (%d)", first)
     i := uint32(first)
-    if first < byte(0x80) {
-        return i, err
-    }
-    b, err := r.rd.ReadByte()
-    i = i << 8 + uint32(b)
-    log.Printf("we got to level 2 (%d)", b)
-    if first < byte(0xC0) {
-        return i &^ 0x8000, err
-    }
-    b, err = r.rd.ReadByte()
-    i = i << 8 + uint32(b)
-    log.Printf("we got to level 3 (%d)", b)
-    if first < byte(0xE0) {
-        return i &^ 0xC00000, err
-    }
-    b, err = r.rd.ReadByte()
-    i = i << 8 + uint32(b)
-    log.Printf("we got to level 4 (%d)", b)
-    if first < byte(0xF0) {
-        return i &^ 0xE0000000, err
+    for t := 0; t<len(threshold); t++ {
+        if first < threshold[t + 1] {
+            // 0x00, 0x8000, 0xC00000, 0xE0000000
+            mask := uint32(threshold[t]) << uint32(t * 8)
+            return i &^ mask, err
+        }
+        b, _ := r.rd.ReadByte()
+        i = i << 8 + uint32(b)
+        log.Printf("byte %d: %d", t + 2, b)
     }
     return i, ErrUnsupportedWordLength
 }
