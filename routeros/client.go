@@ -56,6 +56,12 @@ func (r *ApiReader) ReadLen() (uint32, error) {
     if first < byte(0xE0) {
         return i &^ 0xC00000, err
     }
+    b, err = r.rd.ReadByte()
+    i = i << 8 + uint32(b)
+    log.Printf("we got to level 4 (%d)", b)
+    if first < byte(0xF0) {
+        return i &^ 0xE0000000, err
+    }
     return i, ErrUnsupportedWordLength
 }
 

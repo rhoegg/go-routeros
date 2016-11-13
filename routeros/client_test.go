@@ -114,6 +114,30 @@ func TestReader(t *testing.T) {
                     So(l, ShouldEqual, 2097151)
                 })
             })
+            Convey("for four byte length", func() {
+                b32 := make([]byte, 4)
+                Convey("2097152 (0x200000)", func() {
+                    binary.BigEndian.PutUint32(b32, 2097152)
+                    copy(bs, b32[0:4])
+                    bs[0] |= 0xE0
+                    l, _ := makeApiReader(bs).ReadLen()
+                    So(l, ShouldEqual, 2097152)
+                })
+                Convey("123456789 (0x075BCD15)", func() {
+                    binary.BigEndian.PutUint32(b32, 123456789)
+                    copy(bs, b32[0:4])
+                    bs[0] |= 0xE0
+                    l, _ := makeApiReader(bs).ReadLen()
+                    So(l, ShouldEqual, 123456789)
+                })
+                Convey("268435455 (0x0FFFFFFF)", func() {
+                    binary.BigEndian.PutUint32(b32, 268435455)
+                    copy(bs, b32[0:4])
+                    bs[0] |= 0xE0
+                    l, _ := makeApiReader(bs).ReadLen()
+                    So(l, ShouldEqual, 268435455)
+                })
+            })
         })
     })
 }
