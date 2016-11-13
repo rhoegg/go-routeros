@@ -32,16 +32,24 @@ func NewReader(rd io.Reader) *ApiReader {
 
 func (r *ApiReader) ReadWord() (string, error) {
     l, err := r.ReadLen()
-    data, err := ioutil.ReadAll(io.LimitReader(r.rd, l))
+    data, err := ioutil.ReadAll(io.LimitReader(r.rd, int64(l)))
     return string(data), err
 }
 
-func (r *ApiReader) ReadLen() (int64, error) {
-    b, err := r.rd.ReadByte()
-    if b > byte(0x7F) {
-        return int64(b), ErrUnsupportedWordLength
+func (r *ApiReader) ReadLen() (uint32, error) {
+    first, err := r.rd.ReadByte()
+    log.Printf("we got to level 1 (%d)", first)
+    i := uint32(first)
+    if first < byte(0x80) {
+        return i, err
     }
-    return int64(b), err
+    b, err := r.rd.ReadByte()
+    i = i << 8 + uint32(b)
+    log.Printf("we got to level 2 (%d)", b)
+    if first < byte(0xC0) {
+        return i &^ 0x8000, err
+    }
+    return i, ErrUnsupportedWordLength
 }
 
 func (c *ApiClient) Talk(words []string) []string {
