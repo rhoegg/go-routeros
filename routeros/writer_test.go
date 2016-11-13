@@ -16,7 +16,7 @@ func TestWriter(t *testing.T) {
             Convey("should compute correct word length", func() {
                 So(buf.Bytes()[0], ShouldEqual, byte(4))
             })
-            Convey("should read correct word", func() {
+            Convey("should write correct word", func() {
                 So(string(buf.Bytes()[1:]), ShouldEqual, "test")
             })
         })
