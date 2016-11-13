@@ -36,6 +36,7 @@ func (r *ApiReader) ReadWord() (string, error) {
     return string(data), err
 }
 
+// Algorithm for length is at http://wiki.mikrotik.com/wiki/Manual:API#Protocol
 func (r *ApiReader) ReadLen() (uint32, error) {
     first, err := r.rd.ReadByte()
     log.Printf("we got to level 1 (%d)", first)
@@ -48,6 +49,12 @@ func (r *ApiReader) ReadLen() (uint32, error) {
     log.Printf("we got to level 2 (%d)", b)
     if first < byte(0xC0) {
         return i &^ 0x8000, err
+    }
+    b, err = r.rd.ReadByte()
+    i = i << 8 + uint32(b)
+    log.Printf("we got to level 3 (%d)", b)
+    if first < byte(0xE0) {
+        return i &^ 0xC00000, err
     }
     return i, ErrUnsupportedWordLength
 }
