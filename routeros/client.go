@@ -27,13 +27,16 @@ type Session struct {
 	reader *ApiReader
 }
 
-type Request struct {
+type Sentence struct {
 	Command    string
 	Attributes map[string]string
 }
+type Request struct {
+	Sentence
+}
 type Response struct {
-	Attributes map[string]string
-	words      []string
+	Done      bool
+	Sentences []Sentence
 }
 
 func NewClient(host string, port int, user, password string) *ApiClient {
@@ -63,15 +66,22 @@ func (s *Session) Request(r Request) (Response, error) {
 	return parseResponse(raw), err
 }
 
-func (s *Session) Send(words []string) ([]string, error) {
+func (s *Session) Send(words []string) ([][]string, error) {
 	log.Printf(" -->  %v", words)
 	var err error
 	for _, word := range words {
 		_, err = s.writer.WriteWord(word)
 	}
 	_, err = s.writer.WriteWord("")
-	r, err := s.reader.ReadSentence()
-	log.Printf("  <-- %v", r)
+	r := [][]string{}
+	l, err := s.reader.ReadSentence()
+	r = append(r, l)
+	for l[0] != "!done" && l[0] != "!trap" && l[0] != "!fatal" {
+		log.Printf("  <-- %v", r)
+		l, err = s.reader.ReadSentence()
+		r = append(r, l)
+	}
+
 	return r, err
 }
 
@@ -87,10 +97,16 @@ func request(r Request) []string {
 	return words
 }
 
-func parseResponse(words []string) Response {
-	return Response{
-		Attributes: parseAttributes(words),
-		words:      words}
+func parseResponse(lines [][]string) Response {
+	r := Response{}
+	for _, words := range lines {
+		r.Sentences = append(r.Sentences,
+			Sentence{
+				Command:    words[0][1:],
+				Attributes: parseAttributes(words)})
+	}
+	r.Done = (r.Sentences[len(r.Sentences)-1].Command == "done")
+	return r
 }
 
 func parseAttributes(words []string) map[string]string {
