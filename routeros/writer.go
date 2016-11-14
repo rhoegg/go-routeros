@@ -26,11 +26,11 @@ func (w *ApiWriter) WriteLen(l uint32) error {
 	masked := false
 	for i := 4; i >= 0; i-- {
 		if l >= thresholds[i] {
-			if (!masked) {
-				buf[4 - i] = buf[4 - i] | masks[i]
+			if !masked {
+				buf[4-i] = buf[4-i] | masks[i]
 				masked = true
 			}
-			err = w.w.WriteByte(buf[4 - i])
+			err = w.w.WriteByte(buf[4-i])
 		}
 	}
 	return err

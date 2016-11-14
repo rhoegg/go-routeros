@@ -87,10 +87,10 @@ func writeLenAndReadLength(w *ApiWriter, buf *bytes.Buffer, v int, bytes int) ui
 	w.w.Flush()
 	So(buf.Len(), ShouldEqual, bytes)
 	var r uint32
-	if (bytes <= 4) {
+	if bytes <= 4 {
 		lenbuf := make([]byte, 4)
 		for i := 0; i < bytes; i++ {
-			lenbuf[4 - bytes + i] = buf.Bytes()[i]
+			lenbuf[4-bytes+i] = buf.Bytes()[i]
 		}
 		r = binary.BigEndian.Uint32(lenbuf)
 	} else {
