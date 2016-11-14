@@ -20,6 +20,16 @@ func (r *ApiReader) ReadWord() (string, error) {
 	return string(data), err
 }
 
+func (r *ApiReader) ReadSentence() ([]string, error) {
+	s := []string{}
+	w, err := r.ReadWord()
+	for len(w) > 0 && err == nil {
+		s = append(s, w)
+		w, err = r.ReadWord()
+	}
+	return s, err
+}
+
 // Algorithm for length is at http://wiki.mikrotik.com/wiki/Manual:API#Protocol
 func (r *ApiReader) ReadLen() (uint32, error) {
 	threshold := [...]byte{0, 0x80, 0xC0, 0xE0, 0xF0}
