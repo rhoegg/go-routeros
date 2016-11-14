@@ -14,23 +14,30 @@ func NewWriter(w io.Writer) *ApiWriter {
 	return &ApiWriter{bufio.NewWriter(w)}
 }
 
-func (w *ApiWriter) WriteLen(word string) error {
-	l := uint32(len(word))
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, l)
-	if l > 0x80 {
-		buf[2] = buf[2] | 0x80
-	}
+// Algorithm for length is at http://wiki.mikrotik.com/wiki/Manual:API#Protocol
+func (w *ApiWriter) WriteLen(l uint32) error {
+	thresholds := []uint32{0, 0x80, 0x4000, 0x200000, 0x10000000}
+	masks := []byte{0, 0x80, 0xC0, 0xE0, 0xF0}
+
+	buf := make([]byte, 5)
+	binary.BigEndian.PutUint32(buf[1:], l)
+
 	var err error
-	if l > 0x80 {
-		err = w.w.WriteByte(buf[2])
+	masked := false
+	for i := 4; i >= 0; i-- {
+		if l >= thresholds[i] {
+			if (!masked) {
+				buf[4 - i] = buf[4 - i] | masks[i]
+				masked = true
+			}
+			err = w.w.WriteByte(buf[4 - i])
+		}
 	}
-	err = w.w.WriteByte(buf[3])
 	return err
 }
 
 func (w *ApiWriter) WriteWord(word string) (int, error) {
-	w.WriteLen(word)
+	w.WriteLen(uint32(len(word)))
 	i, err := w.w.Write([]byte(word))
 	w.w.Flush()
 	return i, err
