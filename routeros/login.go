@@ -11,7 +11,7 @@ var (
 )
 
 func (s *Session) Login() error {
-	r, err := s.Request(Request{Sentence{"login", map[string]string{}}})
+	r, err := s.Request(Request{Sentence{"login", map[string]string{}, map[string]string{}}})
 	if !r.Done {
 		return ErrUnsuccessfulLoginResult
 	}
@@ -21,7 +21,8 @@ func (s *Session) Login() error {
 		"login",
 		map[string]string{
 			"name":     s.Client.User,
-			"response": response}}})
+			"response": response},
+		map[string]string{}}})
 	if !r.Done {
 		return ErrUnsuccessfulLoginResult
 	}

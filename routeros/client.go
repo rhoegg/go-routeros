@@ -30,6 +30,7 @@ type Session struct {
 type Sentence struct {
 	Command    string
 	Attributes map[string]string
+	Query map[string]string
 }
 type Request struct {
 	Sentence
@@ -77,7 +78,7 @@ func (s *Session) Send(words []string) ([][]string, error) {
 	l, err := s.reader.ReadSentence()
 	r = append(r, l)
 	for l[0] != "!done" && l[0] != "!trap" && l[0] != "!fatal" {
-		log.Printf("  <-- %v", r)
+		log.Printf("  <-- %v", l)
 		l, err = s.reader.ReadSentence()
 		r = append(r, l)
 	}
@@ -94,6 +95,9 @@ func request(r Request) []string {
 	for k, v := range r.Attributes {
 		words = append(words, fmt.Sprintf("=%s=%s", k, v))
 	}
+	for k, v := range r.Query {
+		words = append(words, fmt.Sprintf("?%s=%s", k, v))
+	}
 	return words
 }
 
@@ -103,7 +107,8 @@ func parseResponse(lines [][]string) Response {
 		r.Sentences = append(r.Sentences,
 			Sentence{
 				Command:    words[0][1:],
-				Attributes: parseAttributes(words)})
+				Attributes: parseAttributes(words),
+				Query: parseQuery(words)})
 	}
 	r.Done = (r.Sentences[len(r.Sentences)-1].Command == "done")
 	return r
@@ -113,6 +118,17 @@ func parseAttributes(words []string) map[string]string {
 	a := map[string]string{}
 	for _, w := range words {
 		if w[0] == '=' {
+			parts := strings.SplitN(w[1:], "=", 2)
+			a[parts[0]] = parts[1]
+		}
+	}
+	return a
+}
+
+func parseQuery(words []string) map[string]string {
+	a := map[string]string{}
+	for _, w := range words {
+		if w[0] == '?' {
 			parts := strings.SplitN(w[1:], "=", 2)
 			a[parts[0]] = parts[1]
 		}
