@@ -30,7 +30,7 @@ type Session struct {
 type Sentence struct {
 	Command    string
 	Attributes map[string]string
-	Query map[string]string
+	Query      map[string]string
 }
 type Request struct {
 	Sentence
@@ -108,7 +108,7 @@ func parseResponse(lines [][]string) Response {
 			Sentence{
 				Command:    words[0][1:],
 				Attributes: parseAttributes(words),
-				Query: parseQuery(words)})
+				Query:      parseQuery(words)})
 	}
 	r.Done = (r.Sentences[len(r.Sentences)-1].Command == "done")
 	return r
