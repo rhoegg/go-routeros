@@ -50,23 +50,22 @@ func (s *Session) AddUser(u User) error {
 }
 
 func (s *Session) RemoveUser(u User) error {
-	pos, err := func() (int, error) {
-		users, err := s.DescribeUsers()
-		if err != nil {
-			return -1, err
-		}
-		for i, user := range users {
-			if user.id == u.id || user.Name == u.Name {
-				return i, nil
-			}
-		}
-		return -1, nil
-	}()
-	if pos > -1 {
-		_, err = s.Request(Request{Sentence{
+	return s.withUserIndex(u, func(pos int) error {
+		_, err := s.Request(Request{Sentence{
 			Command: "user/remove",
 			Attributes: map[string]string{
 				"numbers": strconv.Itoa(pos)}}})
+		return err
+	})
+}
+
+func (s *Session) withUserIndex(u User, action func(int) error) error {
+	users, err := s.DescribeUsers()
+	if err != nil { return err }
+	for i, user := range users {
+		if user.id == u.id || user.Name == u.Name {
+			return action(i)
+		}
 	}
-	return err
+	return nil
 }
