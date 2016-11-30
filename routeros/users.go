@@ -1,5 +1,9 @@
 package routeros
 
+import (
+	"strconv"
+)
+
 type User struct {
 	id       string
 	Name     string
@@ -42,5 +46,27 @@ func (s *Session) AddUser(u User) error {
 			"group":    u.Group,
 			"address":  u.Address,
 			"comment":  u.Comment}}})
+	return err
+}
+
+func (s *Session) RemoveUser(u User) error {
+	pos, err := func() (int, error) {
+		users, err := s.DescribeUsers()
+		if err != nil {
+			return -1, err
+		}
+		for i, user := range users {
+			if user.id == u.id || user.Name == u.Name {
+				return i, nil
+			}
+		}
+		return -1, nil
+	}()
+	if pos > -1 {
+		_, err = s.Request(Request{Sentence{
+			Command: "user/remove",
+			Attributes: map[string]string{
+				"numbers": strconv.Itoa(pos)}}})
+	}
 	return err
 }

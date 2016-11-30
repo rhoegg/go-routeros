@@ -45,25 +45,24 @@ func (s *Session) AddAddress(a Address) error {
 }
 
 func (s *Session) RemoveAddress(a Address) error {
-	pos := -1
-	addresses, err := s.DescribeAddresses()
-	if err != nil {
-		return err
-	}
-	for i, address := range addresses {
-		if address.id == a.id || address.Address == a.Address {
-			pos = i
-			break
+	pos, err := func() (int, error) {
+		addresses, err := s.DescribeAddresses()
+		if err != nil {
+			return -1, err
 		}
+		for i, address := range addresses {
+			if address.id == a.id || address.Address == a.Address {
+				return i, nil
+			}
+		}
+		return -1, nil
+	}()
+	if pos > -1 {
+		_, err = s.Request(Request{Sentence{
+			Command: "ip/address/remove",
+			Attributes: map[string]string{
+				"numbers": strconv.Itoa(pos)},
+			Query: map[string]string{}}})
 	}
-	if pos == -1 {
-		// it's already gone
-		return nil
-	}
-	_, err = s.Request(Request{Sentence{
-		Command: "ip/address/remove",
-		Attributes: map[string]string{
-			"numbers": strconv.Itoa(pos)},
-		Query: map[string]string{}}})
 	return err
 }
