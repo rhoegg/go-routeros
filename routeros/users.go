@@ -1,23 +1,30 @@
 package routeros
 
 import (
+	"github.com/fatih/structs"
 	"strconv"
 )
 
 type User struct {
 	id       string
-	Name     string
-	Group    string
-	Password string
-	Address  string
-	Comment  string
-	Disabled bool
+	Name     string `structs:"name"`
+	Group    string `structs:"group"`
+	Password string `structs:"password,omitempty"`
+	Address  string `structs:"address,omitempty"`
+	Comment  string `structs:"comment,omitempty"`
+	Disabled bool   `structs:"disabled,omitempty"`
+}
+
+func (u User) toAttributes() map[string]string {
+	attrs := map[string]string{}
+	for k, v := range structs.Map(u) {
+		attrs[k] = v.(string)
+	}
+	return attrs
 }
 
 func (s *Session) DescribeUsers() ([]User, error) {
-	r, err := s.Request(Request{Sentence{
-		Command:    "user/print",
-		Attributes: map[string]string{}}})
+	r, err := s.Request("user/print", emptyItem())
 	if err != nil {
 		return nil, err
 	}
@@ -38,30 +45,24 @@ func (s *Session) DescribeUsers() ([]User, error) {
 }
 
 func (s *Session) AddUser(u User) error {
-	_, err := s.Request(Request{Sentence{
-		Command: "user/add",
-		Attributes: map[string]string{
-			"name":     u.Name,
-			"password": u.Password,
-			"group":    u.Group,
-			"address":  u.Address,
-			"comment":  u.Comment}}})
+	_, err := s.Request("user/add", u)
 	return err
 }
 
 func (s *Session) RemoveUser(u User) error {
 	return s.withUserIndex(u, func(pos int) error {
-		_, err := s.Request(Request{Sentence{
-			Command: "user/remove",
-			Attributes: map[string]string{
-				"numbers": strconv.Itoa(pos)}}})
+		_, err := s.Request("user/remove",
+			itemFromMap(map[string]string{
+				"numbers": strconv.Itoa(pos)}))
 		return err
 	})
 }
 
 func (s *Session) withUserIndex(u User, action func(int) error) error {
 	users, err := s.DescribeUsers()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	for i, user := range users {
 		if user.id == u.id || user.Name == u.Name {
 			return action(i)

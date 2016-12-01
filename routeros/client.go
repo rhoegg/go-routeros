@@ -27,6 +27,23 @@ type Session struct {
 	reader *ApiReader
 }
 
+type item interface {
+	toAttributes() map[string]string
+}
+type mapItem struct {
+	Map map[string]string
+}
+
+func (m mapItem) toAttributes() map[string]string {
+	return m.Map
+}
+func itemFromMap(m map[string]string) item {
+	return mapItem{m}
+}
+func emptyItem() item {
+	return itemFromMap(map[string]string{})
+}
+
 type Sentence struct {
 	Command    string
 	Attributes map[string]string
@@ -62,7 +79,10 @@ func (c *ApiClient) Connect() (*Session, error) {
 	return s, err
 }
 
-func (s *Session) Request(r Request) (Response, error) {
+func (s *Session) Request(c string, i item) (Response, error) {
+	r := Request{Sentence{
+		Command:    c,
+		Attributes: i.toAttributes()}}
 	raw, err := s.Send(request(r))
 	return parseResponse(raw), err
 }
@@ -87,7 +107,11 @@ func (s *Session) Send(words []string) ([][]string, error) {
 }
 
 func (s *Session) Close() error {
-	return s.conn.Close()
+	err := s.Quit()
+	if err == nil {
+		err = s.conn.Close()
+	}
+	return err
 }
 
 func request(r Request) []string {
