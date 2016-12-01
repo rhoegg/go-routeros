@@ -35,6 +35,9 @@ func (r *ApiReader) ReadLen() (uint32, error) {
 	threshold := [...]byte{0, 0x80, 0xC0, 0xE0, 0xF0}
 
 	first, err := r.rd.ReadByte()
+	if err != nil {
+		return 0, err
+	}
 	i := uint32(first)
 	for t := 0; t < len(threshold); t++ {
 		if first < threshold[t+1] {

@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 var (
@@ -21,10 +22,12 @@ type ApiClient struct {
 }
 
 type Session struct {
-	Client *ApiClient
-	conn   net.Conn
-	writer *ApiWriter
-	reader *ApiReader
+	Client     *ApiClient
+	conn       net.Conn
+	writer     *ApiWriter
+	reader     *ApiReader
+	cmdCounter int64
+	replies    map[string]chan Sentence
 }
 
 type item interface {
@@ -45,9 +48,11 @@ func emptyItem() item {
 }
 
 type Sentence struct {
-	Command    string
-	Attributes map[string]string
-	Query      map[string]string
+	Command       string
+	Attributes    map[string]string
+	Query         map[string]string
+	ApiAttributes map[string]string
+	words         []string
 }
 type Request struct {
 	Sentence
@@ -71,51 +76,83 @@ func (c *ApiClient) Connect() (*Session, error) {
 		return nil, err
 	}
 	s := &Session{
-		Client: c,
-		conn:   conn,
-		writer: NewWriter(conn),
-		reader: NewReader(conn)}
+		Client:  c,
+		conn:    conn,
+		writer:  NewWriter(conn),
+		reader:  NewReader(conn),
+		replies: map[string]chan Sentence{}}
 	err = s.Login()
+	if err == nil {
+		go s.Receive()
+	}
 	return s, err
 }
 
-func (s *Session) Request(c string, i item) (Response, error) {
-	r := Request{Sentence{
-		Command:    c,
-		Attributes: i.toAttributes()}}
-	raw, err := s.Send(request(r))
-	return parseResponse(raw), err
+func (s *Session) Request(c string, i item) (*Response, error) {
+	tag := strconv.FormatInt(atomic.AddInt64(&s.cmdCounter, 1), 10)
+
+	r := request(Request{Sentence{
+		Command:       c,
+		Attributes:    i.toAttributes(),
+		ApiAttributes: map[string]string{"tag": tag}}})
+	// buffer up to 32 reply sentences for a single tag before blocking
+	s.replies[tag] = make(chan Sentence, 32)
+	if err := s.Send(r); err == nil {
+		return parseResponse(s.replies[tag]), err
+	} else {
+		return nil, err
+	}
 }
 
-func (s *Session) Send(words []string) ([][]string, error) {
+func (s *Session) Send(words []string) error {
 	log.Printf(" -->  %v", words)
 	var err error
 	for _, word := range words {
 		_, err = s.writer.WriteWord(word)
 	}
 	_, err = s.writer.WriteWord("")
-	r := [][]string{}
-	l, err := s.reader.ReadSentence()
-	r = append(r, l)
-	for l[0] != "!done" && l[0] != "!trap" && l[0] != "!fatal" {
-		log.Printf("  <-- %v", l)
-		l, err = s.reader.ReadSentence()
-		r = append(r, l)
-	}
+	return err
+}
 
-	return r, err
+func (s *Session) Receive() {
+	for {
+		words, err := s.reader.ReadSentence()
+		log.Printf("Received a sentence %v", words)
+		if err != nil {
+			log.Printf("Bad news! %v", err)
+			return
+		}
+		s.receiveSentence(parseSentence(words))
+	}
+}
+
+func (s *Session) receiveSentence(sentence Sentence) {
+	tag, tagIncluded := sentence.ApiAttributes["tag"]
+	if tagIncluded {
+		replyChannel, tagExpected := s.replies[tag]
+		if tagExpected {
+			log.Printf("  <-- ( %s) %v", tag, sentence.words)
+			replyChannel <- sentence
+			if sentence.Command == "done" {
+				close(replyChannel)
+			}
+		} else {
+			log.Printf("  <-- (?%s) %v", tag, sentence.words)
+		}
+	} else {
+		log.Printf("  <-- (xx) %v", sentence.words)
+	}
 }
 
 func (s *Session) Close() error {
-	err := s.Quit()
-	if err == nil {
-		err = s.conn.Close()
-	}
-	return err
+	return s.conn.Close()
 }
 
 func request(r Request) []string {
 	words := []string{fmt.Sprintf("/%s", r.Command)}
+	for k, v := range r.ApiAttributes {
+		words = append(words, fmt.Sprintf(".%s=%s", k, v))
+	}
 	for k, v := range r.Attributes {
 		words = append(words, fmt.Sprintf("=%s=%s", k, v))
 	}
@@ -125,17 +162,33 @@ func request(r Request) []string {
 	return words
 }
 
-func parseResponse(lines [][]string) Response {
+func parseResponse(lines <-chan Sentence) *Response {
 	r := Response{}
-	for _, words := range lines {
-		r.Sentences = append(r.Sentences,
-			Sentence{
-				Command:    words[0][1:],
-				Attributes: parseAttributes(words),
-				Query:      parseQuery(words)})
+	for s := range lines {
+		r.Sentences = append(r.Sentences, s)
 	}
 	r.Done = (r.Sentences[len(r.Sentences)-1].Command == "done")
-	return r
+	return &r
+}
+
+func parseSentence(words []string) Sentence {
+	return Sentence{
+		Command:       words[0][1:],
+		ApiAttributes: parseApiAttributes(words),
+		Attributes:    parseAttributes(words),
+		Query:         parseQuery(words),
+		words:         words}
+}
+
+func parseApiAttributes(words []string) map[string]string {
+	a := map[string]string{}
+	for _, w := range words {
+		if w[0] == '.' {
+			parts := strings.SplitN(w[1:], "=", 2)
+			a[parts[0]] = parts[1]
+		}
+	}
+	return a
 }
 
 func parseAttributes(words []string) map[string]string {

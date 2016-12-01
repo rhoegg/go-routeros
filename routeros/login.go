@@ -11,25 +11,29 @@ var (
 )
 
 func (s *Session) Login() error {
-	r, err := s.Request("login", emptyItem())
-	if !r.Done {
-		return ErrUnsuccessfulLoginResult
+	if err := s.Send(request(Request{Sentence{Command: "login"}})); err != nil {
+		return err
 	}
-	challenge := r.Sentences[0].Attributes["ret"]
+	words, err := s.reader.ReadSentence()
+	sentence := parseSentence(words)
+	challenge := sentence.Attributes["ret"]
 	response, err := encodePassword(s.Client.Password, challenge)
-	r, err = s.Request(
-		"login",
-		itemFromMap(map[string]string{
+	if err != nil {
+		return err
+	}
+	err = s.Send(request(Request{Sentence{
+		Command: "login",
+		Attributes: map[string]string{
 			"name":     s.Client.User,
-			"response": response}))
-	if !r.Done {
+			"response": response}}}))
+	if err != nil {
+		return err
+	}
+	words, err = s.reader.ReadSentence()
+	sentence = parseSentence(words)
+	if sentence.Command != "done" {
 		return ErrUnsuccessfulLoginResult
 	}
-	return err
-}
-
-func (s *Session) Quit() error {
-	_, err := s.Request("quit", emptyItem())
 	return err
 }
 
